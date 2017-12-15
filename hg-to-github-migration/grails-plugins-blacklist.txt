@@ -1,0 +1,11 @@
+http://buildserver.jcatalog.com/hg/grails-build-process
+http://buildserver.jcatalog.com/hg/grails-responsibility
+http://buildserver.jcatalog.com/hg/grails-responsibility-editor
+http://buildserver.jcatalog.com/hg/grails-value-mapping
+http://buildserver.jcatalog.com/hg/grails-user-info
+http://buildserver.jcatalog.com/hg/grails-thread-executor
+http://buildserver.jcatalog.com/hg/grails-terms-of-business
+http://buildserver.jcatalog.com/hg/grails-terms-of-business-editors
+http://buildserver.jcatalog.com/hg/grails-system-maintenance
+http://buildserver.jcatalog.com/hg/grails-supplier-editor
+http://buildserver.jcatalog.com/hg/grails-statistic-logging
