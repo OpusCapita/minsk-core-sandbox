@@ -1,0 +1,5 @@
+# JetBrains project files and directories
+.idea
+/*.iml
+/*.ipr
+/*.iws
