@@ -2,3 +2,9 @@
 /hg
 /fast-export
 *.log
+
+# JetBrains project files and directories
+.idea
+/*.iml
+/*.ipr
+/*.iws
