@@ -1,22 +1,28 @@
-// Groovy and grails tools are not yet supported in the declarative pipeline sections "tools".
-node {
-    def grailsHome = tool name: 'grails-2.4.4'
-    env.PATH = "${grailsHome}/bin:${env.PATH}"
-}
+// it looks like sometimes changes from library become available in currentBuild.changeSets instead if original repo
+library identifier: 'utils@master',
+        retriever: modernSCM(
+                [
+                        $class: 'GitSCMSource',
+                        remote: 'https://github.com/OpusCapita/minsk-core-jenkins-util-library.git'
+                ]
+        )
 
 pipeline {
     agent any
+
     tools {
         jdk 'jdk8'
     }
+
     environment {
-        jiraIssue = jiraIssueSelector(issueSelector: [$class: 'DefaultIssueSelector'])
+        def grailsHome = tool name: 'grails-2.4.4'
+        PATH = "${grailsHome}/bin:${env.PATH}"
     }
+
     stages {
-        stage ('Initialize') {
+        stage('Initialize') {
             steps {
                 echo "PATH = ${PATH}"
-                echo "jiraIssue: ${jiraIssue}"
             }
         }
 
@@ -36,13 +42,24 @@ pipeline {
                 always {
                     publishHTML(
                             [
-                                    allowMissing: false,
+                                    allowMissing         : true,
                                     alwaysLinkToLastBuild: false,
-                                    keepAll: true,
-                                    reportDir: 'target/test-reports/html',
-                                    reportFiles: 'index.html',
-                                    reportName: 'Unit Tests Report',
-                                    reportTitles: 'Unit Tests Report'
+                                    keepAll              : true,
+                                    reportDir            : 'target/test-reports/html',
+                                    reportFiles          : 'index.html',
+                                    reportName           : 'Unit Tests Report',
+                                    reportTitles         : 'Unit Tests Report'
+                            ]
+                    )
+                    publishHTML(
+                            [
+                                    allowMissing         : true,
+                                    alwaysLinkToLastBuild: false,
+                                    keepAll              : true,
+                                    reportDir            : 'target/test-reports/cobertura',
+                                    reportFiles          : 'index.html',
+                                    reportName           : 'Test Code Coverage',
+                                    reportTitles         : 'Test Code Coverage'
                             ]
                     )
                 }
@@ -65,71 +82,15 @@ pipeline {
             }
         }
     }
+
     post {
         always {
             script {
                 try {
-                    def result = currentBuild.currentResult
-                    def notify = true
-                    /*
-                    uncommented this code if you want notify message to slake between state change FAILURE -> SUCCESS || SUCCESS -> FAILURE
-                    def previousResult = currentBuild.previousBuild?.result
-                    notify = previousResult != "FAILURE" && result == "FAILURE") || (result == "SUCCESS" && (previousResult == "FAILURE" || previousResult == "UNSTABLE"))
-                    */
-                    if (notify) {
-                        def slackArguments = [channel: "#minsk-coreteam-ci"]
-                        def msg
-                        wrap([$class: 'BuildUser']) {
-                            def ref = currentBuild.changeSets.collect { changeSet ->
-                                changeSet.browser.getChangeSetLink(changeSet.find { true })?.toString()
-                            }.find { true }
-                            if (ref) {
-                                ref = ref.substring(0, ref.indexOf('/commit/'))
-                                msg = "${env.BUILD_USER_ID}'s build (<${env.BUILD_URL}|${env.BUILD_DISPLAY_NAME}>; push) in <${ref}|${ref - "https://github.com/"}> (${env.BRANCH_NAME})"
-                            } else {
-                                msg = "${env.BUILD_USER_ID}'s build (<${env.BUILD_URL}|${env.BUILD_DISPLAY_NAME}>) no changes (${env.BRANCH_NAME})"
-                            }
-                        }
-                        if (result == "FAILURE") {
-                            slackArguments.color = "danger"
-                            slackArguments.message = "Failed: ${msg}"
-                        } else {
-                            slackArguments.color = "good"
-                            slackArguments.message = "Success: ${msg}"
-                        }
-
-                        currentBuild.changeSets.each { changeSet ->
-                            def browser = changeSet.browser
-                            changeSet.each { change ->
-                                def link = browser.getChangeSetLink(change).toString()
-                                slackArguments.message = "${slackArguments.message}\n- ${change.msg} (<${link}|${link.substring(link.lastIndexOf('/') + 1, link.length()).substring(0, 7)}> by ${change.author.toString()})"
-                            }
-                        }
-                        slackSend slackArguments
-                    }
-                    // ['TEST-1, TEST-2'] -> square brackets are removed, split using comma, trim each issue key and remove empty ones
-                    def jiraKeys = jiraIssue?.substring(1, jiraIssue.length() - 1)?.split(',').collect {
-                        it.trim()
-                    }.findAll { it }
-                    echo "jiraKeys: ${jiraKeys}"
-                    // post results into each ticket mentioned in commit messages
-                    for (jiraKey in jiraKeys) {
-                        def comment = "${currentBuild.currentResult}: Integrated in Jenkins build ${JOB_NAME} #${BUILD_NUMBER}, (See ${BUILD_URL})"
-                        currentBuild.changeSets.each { changeSet ->
-                            def browser = changeSet.browser
-                            changeSet.each { change ->
-                                if (change.msg.toLowerCase().contains(jiraKey.toLowerCase())) {
-                                    def link = browser.getChangeSetLink(change)
-                                    comment = "${comment}\n\n${change.msg} (${change.author.toString()}: [${link}])"
-
-                                    for (file in change.affectedFiles) {
-                                        comment += "\n* (${file.editType.name.toLowerCase()}) ${file.path}"
-                                    }
-                                }
-                            }
-                        }
-                        jiraComment body: comment, issueKey: "${jiraKey}"
-                    }
+                    echo "Notification to `Slack`"
+                    slack.sendNotification()
+                    echo "Notification to `JIRA`"
+                    jira.addComments()
                 } catch (e) {
                     echo "ERROR: ${e.message}"
                     throw e
