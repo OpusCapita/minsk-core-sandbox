@@ -9,3 +9,4 @@ http://buildserver.jcatalog.com/hg/grails-terms-of-business-editors
 http://buildserver.jcatalog.com/hg/grails-system-maintenance
 http://buildserver.jcatalog.com/hg/grails-supplier-editor
 http://buildserver.jcatalog.com/hg/grails-statistic-logging
+http://buildserver.jcatalog.com/hg/grails-application-configuration

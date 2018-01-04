@@ -196,6 +196,34 @@ def changeLocalGitFiles = { repoName, url, File gitRepoDir ->
             log.info "git add ${pluginDescriptorFilePath.name}"
             executeCommand("git add ${pluginDescriptorFilePath.name}", gitRepoDir)
         }
+
+        File readmeFile = new File(gitRepoDir, 'README.md')
+        if (!readmeFile.exists()) {
+            readmeFile.createNewFile()
+
+            String descriptorText = pluginDescriptorFilePath.text
+
+            def m = descriptorText =~ /title\s?=\s?"([^"]+)"/
+            def title = m ? m[0][1] : ''
+            if (!title) {
+                m = descriptorText =~ /title\s?=\s?'([^']+)'/
+                title = m ? m[0][1] : 'Grails Plugin'
+            }
+
+            m = descriptorText =~ /description\s?=\s?"([^"]+)"/
+            def description = m ? m[0][1] : ''
+            if (!description) {
+                m = descriptorText =~ /description\s?=\s?'([^']+)'/
+                description = m ? m[0][1] : ''
+            }
+
+            readmeFile.text = """# ${title}
+
+${description}
+"""
+
+            executeCommand('git add README.md', gitRepoDir)
+        }
     }
     if (new File(gitRepoDir, "CHANGES.txt").exists()) {
         executeCommand('git mv CHANGES.txt CHANGELOG.md', gitRepoDir)
@@ -252,7 +280,11 @@ def migrateGrailsPluginFromMercurial2Git = { String url ->
     executeCommand("git init ${repoName}", gitRootDir)
     executeCommand("${basedir.absolutePath}/fast-export/hg-fast-export.sh -r ${hgRepoDir.absolutePath}", gitRepoDir)
     executeCommand("git checkout HEAD", gitRepoDir)
-    changeLocalGitFiles(repoName, url, gitRepoDir)
+    if (new File(gitRepoDir, "application.properties").exists()) {
+        changeLocalGitFiles(repoName, url, gitRepoDir)
+    } else {
+        log.warn "Skipping local changes for branch [master], because application.properties doesn't exists"
+    }
 
     List branches = getMercurialBranches(hgRepoDir)
 
@@ -275,7 +307,11 @@ def migrateGrailsPluginFromMercurial2Git = { String url ->
         log.info "git checkout ${branchName}"
 
         executeCommand("git checkout ${branchName}", gitRepoDir)
-        changeLocalGitFiles(repoName, url, gitRepoDir)
+        if (new File(gitRepoDir, "application.properties").exists()) {
+            changeLocalGitFiles(repoName, url, gitRepoDir)
+        } else {
+            log.warn "Skipping local changes for branch [${branchName}], because application.properties doesn't exists"
+        }
     }
 
     log.info "git checkout master"
@@ -289,19 +325,19 @@ def migrateGrailsPluginFromMercurial2Git = { String url ->
                 "curl -u ${gitHubUser}:${gitHubPassword} -d '{\"name\": \"${repoName}\", \"description\": \"\", \"private\": true}' https://api.github.com/orgs/OpusCapita/repos"
         ], basedir)
 
+        executeCommand("git remote add origin git@github.com:OpusCapita/${repoName}.git", gitRepoDir)
+        executeCommand("git push -u origin master", gitRepoDir)
+        executeCommand("git push --all", gitRepoDir)
+        executeCommand("git push --tags", gitRepoDir)
+
         for (e in collaborators) {
             log.info "add collaborator [${e.key}] with [${e.value}] role for repo https://github.com/OpusCapita/${repoName}"
             executeCommand([
                     '/bin/sh',
                     '-c',
-                    "curl -u ${gitHubUser}:${gitHubPassword} -X PUT -d '{\"role\": \"${e.value}\"}' https://api.github.com/repos/ddivin-sc/test/collaborators/${e.key}"
+                    "curl -u ${gitHubUser}:${gitHubPassword} -X PUT -d '{\"role\": \"${e.value}\"}' https://api.github.com/repos/OpusCapita/${repoName}/collaborators/${e.key}"
             ], basedir)
         }
-
-        executeCommand("git remote add origin git@github.com:OpusCapita/${repoName}.git", gitRepoDir)
-        executeCommand("git push -u origin master", gitRepoDir)
-        executeCommand("git push --all", gitRepoDir)
-        executeCommand("git push --tags", gitRepoDir)
     }
     executeCommand([
             '/bin/sh',
@@ -344,7 +380,7 @@ def migrateGrailsPluginFromMercurial2Git = { String url ->
     System.in.read()
 }
 
-def blackListGrailsPlugins = new File("./grails-plugins-blacklist.txt").readLines().collect {it.trim()}.findAll {it}
+def blackListGrailsPlugins = new File("./grails-plugins-black-list.txt").readLines().collect {it.trim()}.findAll {it}
 def grailsPlugins = new File("./grails-plugins-list.txt").readLines().collect {it.trim()}.findAll {it}
 (grailsPlugins - blackListGrailsPlugins).forEach {
     migrateGrailsPluginFromMercurial2Git(it)
